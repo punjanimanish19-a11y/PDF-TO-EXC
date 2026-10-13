@@ -1,35 +1,71 @@
 
-name: Build AI Excel Pro for Windows
+name: Build AIExcelPro Windows EXE
 
 on:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: Download repository
+      - name: Get project files
         uses: actions/checkout@v4
 
-      - name: Extract application ZIP
-        shell: pwsh
-        run: |
-          Expand-Archive -Path ai-excel-pro.zip -DestinationPath app -Force
-          Get-ChildItem app -Recurse
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Check application files
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Extract application
         shell: pwsh
         run: |
-          $files = Get-ChildItem app -Recurse -File
-          if ($files.Count -eq 0) {
-            throw "No application files found inside ZIP."
+          Expand-Archive -LiteralPath "ai-excel-pro-windows-exe-builder.zip" -DestinationPath "source" -Force
+          if (!(Test-Path "source/ai-excel-pro-desktop/backend/app/desktop.py")) {
+            throw "Desktop application files were not found."
           }
-          Write-Host "Application files found: $($files.Count)"
 
-      - name: Upload project for inspection
+      - name: Install Python packages
+        shell: pwsh
+        working-directory: source/ai-excel-pro-desktop
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt pyinstaller
+
+      - name: Build frontend
+        shell: pwsh
+        working-directory: source/ai-excel-pro-desktop/frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: Prepare application files
+        shell: pwsh
+        working-directory: source/ai-excel-pro-desktop
+        run: |
+          New-Item -ItemType Directory -Force backend/app/web | Out-Null
+          Copy-Item frontend/dist/* backend/app/web/ -Recurse -Force
+
+      - name: Package Windows executable
+        shell: pwsh
+        working-directory: source/ai-excel-pro-desktop
+        run: |
+          pyinstaller --noconfirm --clean --name AIExcelPro --onefile --windowed --paths backend --add-data "backend/app/web;app/web" --collect-all pdfplumber --collect-all fitz --collect-all openpyxl --collect-all pandas --collect-all PIL --collect-all pytesseract --hidden-import app.processing --hidden-import app.main --hidden-import multipart backend/app/desktop.py
+          if (!(Test-Path "dist/AIExcelPro.exe")) {
+            throw "EXE build failed."
+          }
+
+      - name: Upload finished EXE
         uses: actions/upload-artifact@v4
         with:
-          name: AIExcelPro-project-files
-          path: app/
+          name: AIExcelPro-Windows-EXE
+          path: source/ai-excel-pro-desktop/dist/AIExcelPro.exe
           if-no-files-found: error
