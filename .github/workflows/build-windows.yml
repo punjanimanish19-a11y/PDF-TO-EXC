@@ -1,0 +1,35 @@
+
+name: Build AI Excel Pro for Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v4
+
+      - name: Extract application ZIP
+        shell: pwsh
+        run: |
+          Expand-Archive -Path ai-excel-pro.zip -DestinationPath app -Force
+          Get-ChildItem app -Recurse
+
+      - name: Check application files
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem app -Recurse -File
+          if ($files.Count -eq 0) {
+            throw "No application files found inside ZIP."
+          }
+          Write-Host "Application files found: $($files.Count)"
+
+      - name: Upload project for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIExcelPro-project-files
+          path: app/
+          if-no-files-found: error
