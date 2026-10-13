@@ -12,58 +12,58 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Get project files
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Extract application
+      - name: Extract desktop project
         shell: pwsh
         run: |
           Expand-Archive -LiteralPath "ai-excel-pro-windows-exe-builder.zip" -DestinationPath "source" -Force
           if (!(Test-Path "source/ai-excel-pro-desktop/backend/app/desktop.py")) {
-            throw "Desktop application files were not found."
+            throw "Desktop launcher is missing from the builder ZIP."
           }
 
-      - name: Install Python packages
+      - name: Install Python dependencies
         shell: pwsh
         working-directory: source/ai-excel-pro-desktop
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt pyinstaller
+          python -m pip install -r backend/requirements.txt pyinstaller
 
-      - name: Build frontend
+      - name: Build web interface
         shell: pwsh
         working-directory: source/ai-excel-pro-desktop/frontend
         run: |
           npm install
           npm run build
 
-      - name: Prepare application files
+      - name: Include web interface in application
         shell: pwsh
         working-directory: source/ai-excel-pro-desktop
         run: |
           New-Item -ItemType Directory -Force backend/app/web | Out-Null
           Copy-Item frontend/dist/* backend/app/web/ -Recurse -Force
 
-      - name: Package Windows executable
+      - name: Create Windows EXE
         shell: pwsh
         working-directory: source/ai-excel-pro-desktop
         run: |
-          pyinstaller --noconfirm --clean --name AIExcelPro --onefile --windowed --paths backend --add-data "backend/app/web;app/web" --collect-all pdfplumber --collect-all fitz --collect-all openpyxl --collect-all pandas --collect-all PIL --collect-all pytesseract --hidden-import app.processing --hidden-import app.main --hidden-import multipart backend/app/desktop.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name AIExcelPro --paths backend --add-data "backend/app/web;app/web" --collect-all uvicorn --collect-all fastapi --collect-all pdfplumber --collect-all fitz --collect-all openpyxl --collect-all pandas --collect-all PIL --collect-all multipart --collect-submodules app backend/app/desktop.py
           if (!(Test-Path "dist/AIExcelPro.exe")) {
-            throw "EXE build failed."
+            throw "AIExcelPro.exe was not created."
           }
 
-      - name: Upload finished EXE
+      - name: Upload AIExcelPro.exe
         uses: actions/upload-artifact@v4
         with:
           name: AIExcelPro-Windows-EXE
